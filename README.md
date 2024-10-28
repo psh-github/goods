@@ -6,7 +6,7 @@
 2. Swagger를 통함 테스트 진행
 -> http://localhost:8080/swagger-ui/index.html
    (테스트를 위한 기초 데이터 및 등록된 상품 목록 확인 API 추가)
-   <img width="439" alt="스크린샷 2024-10-28 오후 9 47 26" src="https://github.com/user-attachments/assets/a31d16bd-a76d-4db8-8976-6aec27edda1d">
+<img width="439" alt="스크린샷 2024-10-28 오후 9 47 26" src="https://github.com/user-attachments/assets/a31d16bd-a76d-4db8-8976-6aec27edda1d">
 
 
 <<테이블 구성도>>
