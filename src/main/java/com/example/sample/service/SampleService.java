@@ -79,6 +79,10 @@ public class SampleService {
         if (brand == null) {
             brand = brandRepository.save(new Brand(null, goodsInfoVO.getBrandName(),0L));
         }
+        String[] categoryArr = new String[]{"상의", "아우터", "바지", "스니커즈", "가방", "모자", "양말", "액세서리"};
+        if(!Arrays.stream(categoryArr).filter(c->c.equals(goodsInfoVO.getCategory())).findFirst().isPresent()) {
+            throw new Exception("등록 할수 없는 카케고리 입니다");
+        }
         // 해당브랜드에 이미 상품이 등록되어 있으면 에러
         Goods oldGoods = goodsRepository.findByCategoryAndBrandId(goodsInfoVO.getCategory(), brand.getBrandId());
         if (oldGoods != null) {
@@ -136,7 +140,7 @@ public class SampleService {
                 }
 
                 String[] categoryArr = new String[]{"상의", "아우터", "바지", "스니커즈", "가방", "모자", "양말", "액세서리"};
-                if(categoryArr.equals(goodsInfoVO.getCategory())) {
+                if(!Arrays.stream(categoryArr).filter(c->c.equals(goodsInfoVO.getCategory())).findFirst().isPresent()) {
                     throw new Exception("등록 할수 없는 카케고리 입니다");
                 }
 
