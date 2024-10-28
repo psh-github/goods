@@ -16,6 +16,9 @@ public interface GoodsRepository extends CrudRepository<Goods,Long> {
     // 상품 ID 조회
     public Goods findByGoodsId(Long goodsId);
 
+    // 케테고리와 브랜드ID가 같은 상품 조회
+    public Goods findByCategoryAndBrandId(String Category, Long BrandId);
+
     // 카테고리 별 상품 조회
     public List<Goods> findByCategory(String Category);
 

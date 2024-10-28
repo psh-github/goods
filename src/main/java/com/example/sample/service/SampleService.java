@@ -50,7 +50,11 @@ public class SampleService {
 
         goodsList.stream().forEach(g -> {
             System.out.println(g.toString());
-            saveGoods(g);
+            try {
+                saveGoods(g);
+            } catch (Exception e) {
+               e.printStackTrace();
+            }
         });
 
 
@@ -66,38 +70,39 @@ public class SampleService {
      * @return 등록 성공여부
      */
     @Transactional
-    public boolean saveGoods(GoodsInfoVO goodsInfoVO) {
+    public boolean saveGoods(GoodsInfoVO goodsInfoVO) throws Exception{
 
         boolean result = false;
 
-        try {
 
-            Brand brand = brandRepository.findByBrandName(goodsInfoVO.getBrandName());
-            if (brand == null) {
-                brand = brandRepository.save(new Brand(null, goodsInfoVO.getBrandName(),0L));
-            }
-            Goods goods = goodsRepository.save(new Goods(null, goodsInfoVO.getCategory(),brand.getBrandId(),goodsInfoVO.getPrice()));
-            mappingRepository.save(new Mapping(null, brand.getBrandId(),goods.getGoodsId()));
-
-            // 카테고리별 최소값 / 최대값 계산
-            loghighFunc(goodsInfoVO.getCategory());
-
-            // 여기서 브랜드 총금액 계산
-            List<Goods> brandGoodsList = goodsRepository.findByBrandId(brand.getBrandId());
-
-            Long totalPirce = brandGoodsList.stream().map(Goods::getPrice).reduce(0L, Long::sum);
-
-            Brand brandInfo = brandRepository.findById(brand.getBrandId()).orElse(null);
-
-            if (brandInfo != null) {
-                brandInfo.setTotalprice(totalPirce);
-            }
-
-            result = true;
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        Brand brand = brandRepository.findByBrandName(goodsInfoVO.getBrandName());
+        if (brand == null) {
+            brand = brandRepository.save(new Brand(null, goodsInfoVO.getBrandName(),0L));
         }
+        // 해당브랜드에 이미 상품이 등록되어 있으면 에러
+        Goods oldGoods = goodsRepository.findByCategoryAndBrandId(goodsInfoVO.getCategory(), brand.getBrandId());
+        if (oldGoods != null) {
+            throw new Exception(brand.getBrandId()+" 브랜드에는 이미 해당 카테고리 상품이 등록되어 있습니다");
+        }
+
+        Goods goods = goodsRepository.save(new Goods(null, goodsInfoVO.getCategory(),brand.getBrandId(),goodsInfoVO.getPrice()));
+        mappingRepository.save(new Mapping(null, brand.getBrandId(),goods.getGoodsId()));
+
+        // 카테고리별 최소값 / 최대값 계산
+        loghighFunc(goodsInfoVO.getCategory());
+
+        // 여기서 브랜드 총금액 계산
+        List<Goods> brandGoodsList = goodsRepository.findByBrandId(brand.getBrandId());
+
+        Long totalPirce = brandGoodsList.stream().map(Goods::getPrice).reduce(0L, Long::sum);
+
+        Brand brandInfo = brandRepository.findById(brand.getBrandId()).orElse(null);
+
+        if (brandInfo != null) {
+            brandInfo.setTotalprice(totalPirce);
+        }
+
+        result = true;
 
 
         return result;
@@ -111,7 +116,7 @@ public class SampleService {
      * @return
      */
     @Transactional
-    public boolean modifyGoods(GoodsInfoVO goodsInfoVO) {
+    public boolean modifyGoods(GoodsInfoVO goodsInfoVO) throws Exception{
         boolean result = false;
 
         List<String> categoryList = new ArrayList<>();
@@ -128,6 +133,11 @@ public class SampleService {
                 categoryList.add(goodsInfoVO.getCategory());
                 if(!goods.getCategory().equals(goodsInfoVO.getCategory())) {
                     goods.setCategory(goodsInfoVO.getCategory());
+                }
+
+                String[] categoryArr = new String[]{"상의", "아우터", "바지", "스니커즈", "가방", "모자", "양말", "액세서리"};
+                if(categoryArr.equals(goodsInfoVO.getCategory())) {
+                    throw new Exception("등록 할수 없는 카케고리 입니다");
                 }
 
             }
@@ -148,7 +158,7 @@ public class SampleService {
                 // 2-1. 브랜드 변경(없는경우 새로 생성)o
                 Brand brand = brandRepository.findByBrandName(goodsInfoVO.getBrandName());
                 if (brand == null) {
-                    brand = brandRepository.save(new Brand(null, goodsInfoVO.getBrandName(),goodsInfoVO.getPrice()));
+                    throw new Exception("브랜드가 존해하지 않습니다.");
                 }
                 goods.setBrandId(brand.getBrandId());
 
@@ -162,6 +172,8 @@ public class SampleService {
 
 
             result = true;
+        } else {
+            throw new Exception("등록된 상품이 없습니다.");
         }
 
         return result;
@@ -173,7 +185,7 @@ public class SampleService {
      * @param goodsInfoVO
      * @return
      */
-    public boolean removeGoods(GoodsInfoVO goodsInfoVO) {
+    public boolean removeGoods(GoodsInfoVO goodsInfoVO) throws Exception{
         boolean result = false;
 
         Goods goods = goodsRepository.findByGoodsId(goodsInfoVO.getGoodsId());
@@ -182,6 +194,8 @@ public class SampleService {
 
             loghighFunc(goodsInfoVO.getCategory());
             result = true;
+        } else {
+            throw new Exception("삭제할 상품이 없습니다.");
         }
 
         return result;
@@ -208,79 +222,58 @@ public class SampleService {
     }
 
     /**
-     * 카테고리별 상품 리스트
-     *
-     * @param category
-     * @return
-     */
-    public List<GoodsVO> findCategoryGoodsList(String category) {
-
-        List<Goods> goodsList = goodsRepository.findByCategory(category);
-
-        return goodsList.stream().map(g->{
-         return GoodsVO.builder()
-                 .goodsId(g.getGoodsId())
-                 .category(g.getCategory())
-                 .brandId(g.getBrandId())
-                 .price(g.getPrice())
-                 .build();
-        }).collect(Collectors.toList());
-    }
-
-    /**
      * 카테고리 별 최저가격 브랜드와 상품 가격, 총액을 조회하는 API
      *
      * @return 카테고리 별 최저가격 브랜드와 상품 리스트 및 총액
      */
-    public LowPirceGoodsVO findLowPriceGoodsSet() {
+    public LowPirceGoodsVO findLowPriceGoodsSet() throws Exception{
 
         List<Goods> goodsList = new ArrayList<>();
         Long totalPrice = 0L;
-        try {
 
-            // 최저가 목록
-            List<LowHigh> lowPriceList = lowHighRepository.findByLowhighDevide("L");
 
-            // 브랜드 리스트
-            List<Brand> brandList = brandRepository.findAll();
-
-            // 최저가 상품 정보 조회
-            lowPriceList.stream().forEach(l->{
-                Goods goods = goodsRepository.findById(l.getGoodsId()).orElse(null);
-                if (goods != null) {goodsList.add(goods);}
-            });
-
-            // 총액
-            totalPrice = goodsList.stream().map(Goods::getPrice).reduce(0L, Long::sum);
-
-            DecimalFormat df = new DecimalFormat("###,###");
-
-            return LowPirceGoodsVO.builder()
-                            .totalPrice(totalPrice)
-                            .goodsList(goodsList.stream().map(g->LowPirceGoodsVO.goodsList.builder()
-                                            .category(g.getCategory())
-                                            .brandName(brandList.stream().filter(b->b.getBrandId() == g.getBrandId()).findFirst().map(Brand::getBrandName).orElse(""))
-                                            .price(df.format(g.getPrice()))
-                                            .build()).collect(Collectors.toList()))
-                            .build();
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        // 최저가 목록
+        List<LowHigh> lowPriceList = lowHighRepository.findByLowhighDevide("L");
+        if (lowPriceList == null || lowPriceList.size() == 0) {
+            throw new Exception("등록된 상품이 없습니다.");
         }
+
+        // 브랜드 리스트
+        List<Brand> brandList = brandRepository.findAll();
+
+        // 최저가 상품 정보 조회
+        lowPriceList.stream().forEach(l->{
+            Goods goods = goodsRepository.findById(l.getGoodsId()).orElse(null);
+            if (goods != null) {goodsList.add(goods);}
+        });
+
+        // 총액
+        totalPrice = goodsList.stream().map(Goods::getPrice).reduce(0L, Long::sum);
+
+        DecimalFormat df = new DecimalFormat("###,###");
 
         return LowPirceGoodsVO.builder()
                 .totalPrice(totalPrice)
+                .goodsList(goodsList.stream().map(g->LowPirceGoodsVO.goodsList.builder()
+                                .category(g.getCategory())
+                                .brandName(brandList.stream().filter(b->b.getBrandId() == g.getBrandId()).findFirst().map(Brand::getBrandName).orElse(""))
+                                .price(df.format(g.getPrice()))
+                                .build()).collect(Collectors.toList()))
                 .build();
     }
 
     /**
      * 단일 브랜드로 모든 카테고리 상품을 구매할 때 최저가격에 판매하는 브랜드와 카테고리의 상품가격, 총액을 조회하는 API
      *
-     * @return
+     * @return 단일브랜드 최저가 정보
      */
-    public Map<String,Object> findLowPriceBrandSet() {
+    public Map<String,Object> findLowPriceBrandSet() throws Exception{
 
+        Map<String,Object> lowMap = new HashMap<>();
         Brand brand = brandRepository.findTop1ByOrderByTotalpriceAsc();
+        if (brand == null) {
+            throw new Exception("최저가 브랜드가 없습니다.");
+        }
 
         List<Goods> goodsList = goodsRepository.findByBrandId(brand.getBrandId());
 
@@ -288,7 +281,6 @@ public class SampleService {
 
         DecimalFormat df = new DecimalFormat("###,###");
 
-        Map<String,Object> lowMap = new HashMap<>();
         Map<String,Object> brandMap = new HashMap<>();
         brandMap.put("브랜드",brand.getBrandName());
         brandMap.put("카테고리",goodsList.stream().map(g->{
@@ -299,7 +291,6 @@ public class SampleService {
         }).collect(Collectors.toList()));
 
         brandMap.put("총액",df.format(totalPrice));
-
         lowMap.put("최저가",brandMap);
 
         return lowMap;
@@ -308,24 +299,35 @@ public class SampleService {
     /**
      * 카테고리 이름으로 최저, 최고 가격 브랜드와 상품 가격을 조회하는 API
      *
-     * @return
+     * @return 카테고리의 최저 / 최고 가격의 상품
      */
-    public Map<String,Object> findCategoryLowHighGoodsList(String category) {
+    public Map<String,Object> findCategoryLowHighGoodsList(String category) throws Exception{
 
-        List<LowHigh> lowHigh = lowHighRepository.findByCategory(category);
-
-        List<Brand> brandList = brandRepository.findAll();
         Map<String,Object> lowMap = new HashMap<>();
-        lowMap.put("카테고리",category);
+        try {
 
-        DecimalFormat df = new DecimalFormat("###,###");
-        lowHigh.stream().forEach(l->{
-            Goods goods = goodsRepository.findByGoodsId(l.getGoodsId());
-            Map<String,String> goodsMap = new HashMap<>();
-            goodsMap.put("브랜드",brandList.stream().filter(b->b.getBrandId().equals(goods.getBrandId())).map(Brand::getBrandName).findFirst().orElse(""));
-            goodsMap.put("가격",df.format(goods.getPrice()));
-            lowMap.put(l.getLowhighDevide().equals("L")?"최저가":"최고가",goodsMap);
-        });
+            List<LowHigh> lowHigh = lowHighRepository.findByCategory(category);
+            if (lowHigh != null || lowHigh.size() > 0) {
+                throw new Exception("카테고리의 최저/최고 가격의 정보가 없습니다");
+            }
+
+            List<Brand> brandList = brandRepository.findAll();
+
+            lowMap.put("카테고리",category);
+
+            DecimalFormat df = new DecimalFormat("###,###");
+            lowHigh.stream().forEach(l->{
+                Goods goods = goodsRepository.findByGoodsId(l.getGoodsId());
+                Map<String,String> goodsMap = new HashMap<>();
+                goodsMap.put("브랜드",brandList.stream().filter(b->b.getBrandId().equals(goods.getBrandId())).map(Brand::getBrandName).findFirst().orElse(""));
+                goodsMap.put("가격",df.format(goods.getPrice()));
+                lowMap.put(l.getLowhighDevide().equals("L")?"최저가":"최고가",goodsMap);
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new Exception(e.getMessage());
+
+        }
 
         return lowMap;
     }
